@@ -3,27 +3,36 @@ package ro.redeul.google.go.runner;
 import com.intellij.execution.*;
 import com.intellij.execution.configurations.CommandLineState;
 import com.intellij.execution.configurations.GeneralCommandLine;
+import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.process.OSProcessHandler;
 import com.intellij.execution.process.ProcessHandler;
 import com.intellij.execution.runners.ExecutionEnvironment;
 import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.ui.ConsoleView;
-import com.intellij.openapi.module.Module;
+import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
-import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.EmptyRunnable;
+import com.intellij.openapi.vfs.VirtualFileManager;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowAnchor;
+import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.ui.content.Content;
+import com.intellij.ui.content.ContentFactory;
 import org.jetbrains.annotations.NotNull;
 import ro.redeul.google.go.config.sdk.GoSdkData;
 import ro.redeul.google.go.runner.ui.properties.GoTestConsoleProperties;
 import ro.redeul.google.go.sdk.GoSdkUtil;
 
 import java.io.File;
-import java.util.HashMap;
+import java.util.Map;
 
 import static com.intellij.execution.testframework.sm.SMTestRunnerConnectionUtil.createAndAttachConsole;
-import static ro.redeul.google.go.sdk.GoSdkUtil.prependToGoPath;
 
 class GoCommandLineState extends CommandLineState {
+    private static final String TITLE = "go test";
+
     private final GoTestConsoleProperties consoleProperties;
 
     public GoCommandLineState(GoTestConsoleProperties consoleProperties, ExecutionEnvironment env) {
@@ -34,11 +43,9 @@ class GoCommandLineState extends CommandLineState {
     @NotNull
     @Override
     protected OSProcessHandler startProcess() throws ExecutionException {
-        GeneralCommandLine commandLine = new GeneralCommandLine();
-
-        GoTestConfiguration cfg = consoleProperties.getConfiguration();
-        Module module = cfg.getConfigurationModule().getModule();
-        Sdk sdk = GoSdkUtil.getGoogleGoSdkForProject(cfg.getProject());
+        GoTestConfiguration testConfiguration = consoleProperties.getConfiguration();
+        Project project = testConfiguration.getProject();
+        Sdk sdk = GoSdkUtil.getGoogleGoSdkForProject(project);
         if ( sdk == null ) {
             throw new CantRunException("No Go Sdk defined for this project");
         }
@@ -48,65 +55,147 @@ class GoCommandLineState extends CommandLineState {
             throw new CantRunException("No Go Sdk defined for this project");
         }
 
-        if ( module == null || module.getModuleFile() == null ) {
-            throw new CantRunException("No module selected for this test configuration");
+        String projectDir = project.getBasePath();
+
+        if (projectDir == null) {
+            throw new CantRunException("Could not retrieve the project directory");
         }
 
-        final VirtualFile moduleFile = module.getModuleFile();
-        if ( moduleFile == null || moduleFile.getParent() == null) {
-            throw new CantRunException("The module does not have a valid parent folder");
+        String goExecName = sdkData.GO_EXEC;
+        String workingDir = testConfiguration.workingDir;
+        Map<String,String> sysEnv = GoSdkUtil.getExtendedSysEnv(sdkData, projectDir, testConfiguration.envVars);
+
+        if (testConfiguration.goVetEnabled) {
+            try {
+                ToolWindowManager manager = ToolWindowManager.getInstance(project);
+                ToolWindow window = manager.getToolWindow(GoCommonConsoleView.ID);
+
+                if (GoCommonConsoleView.consoleView == null) {
+                    GoCommonConsoleView.consoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
+                }
+                ConsoleView consoleView = GoCommonConsoleView.consoleView;
+
+                if (window == null) {
+                    window = manager.registerToolWindow(GoCommonConsoleView.ID, false, ToolWindowAnchor.BOTTOM);
+
+                    ContentFactory contentFactory = ContentFactory.SERVICE.getInstance();
+                    Content content = contentFactory.createContent(consoleView.getComponent(), "", false);
+                    window.getContentManager().addContent(content);
+                    window.setIcon(GoSdkUtil.getProjectIcon(sdk));
+                    window.setToHideOnEmptyContent(true);
+                }
+                window.setTitle(TITLE);
+
+                window.show(EmptyRunnable.getInstance());
+
+                String[] goEnv = GoSdkUtil.convertEnvMapToArray(sysEnv);
+
+                String command = String.format(
+                        "%s vet ./...",
+                        goExecName
+                );
+
+                Runtime rt = Runtime.getRuntime();
+                Process proc = rt.exec(command, goEnv, new File(projectDir));
+                OSProcessHandler handler = new OSProcessHandler(proc, null);
+                consoleView.attachToProcess(handler);
+                consoleView.print(String.format("%s%n", command), ConsoleViewContentType.NORMAL_OUTPUT);
+                handler.startNotify();
+
+                if (proc.waitFor() == 0) {
+                    VirtualFileManager.getInstance().syncRefresh();
+                    consoleView.print(String.format("%nFinished running go vet on project %s%n", projectDir), ConsoleViewContentType.NORMAL_OUTPUT);
+                } else {
+                    consoleView.print(String.format("%nCouldn't vet project %s%n", projectDir), ConsoleViewContentType.ERROR_OUTPUT);
+                    throw new CantRunException(String.format("Error while processing %s vet command.", goExecName));
+                }
+            } catch (Exception e) {
+                throw new CantRunException(String.format("Error while processing %s vet command.", goExecName));
+            }
         }
 
+        // Install dependencies
+        GeneralCommandLine testInstallDependencies = new GeneralCommandLine();
+        testInstallDependencies.setExePath(goExecName);
+        testInstallDependencies.addParameter("test");
+        testInstallDependencies.addParameter("-i");
 
-        GeneralCommandLine testi = new GeneralCommandLine();
-        testi.setExePath(sdkData.GO_BIN_PATH);
-        testi.addParameter("test");
-        testi.addParameter("-i");
-        testi.addParameter(cfg.packageName);
-        testi.getEnvironment().put("GOPATH", prependToGoPath(moduleFile.getParent().getCanonicalPath()));
-        testi.getEnvironment().put("GOROOT", getSdkHomePath(sdkData));
+        if (testConfiguration.testArgs != null && testConfiguration.testArgs.trim().length() > 0) {
+            testInstallDependencies.getParametersList().addParametersString(testConfiguration.testArgs);
+        }
+
+        if (testConfiguration.testTargetType.equals(GoTestConfiguration.TestTargetType.Package)) {
+            testInstallDependencies.addParameter(testConfiguration.packageName);
+        } else if (testConfiguration.testTargetType.equals(GoTestConfiguration.TestTargetType.File)) {
+            testInstallDependencies.addParameter(testConfiguration.testFile);
+        } else if (testConfiguration.testTargetType.equals(GoTestConfiguration.TestTargetType.CWD)) {
+            testInstallDependencies.addParameter("./...");
+        }
+
+        testInstallDependencies.getEnvironment().putAll(sysEnv);
+        testInstallDependencies.setWorkDirectory(workingDir);
         try {
-            testi.createProcess().waitFor();
-        } catch (InterruptedException e) {
+            if (testInstallDependencies.createProcess().waitFor() == 0) {
+                VirtualFileManager.getInstance().syncRefresh();
+            }
+        } catch (InterruptedException ignored) {
         }
 
-        commandLine.setExePath(sdkData.GO_BIN_PATH);
+        // Run the test
+        GeneralCommandLine commandLine = new GeneralCommandLine();
+        commandLine.setExePath(goExecName);
         commandLine.addParameter("test");
         commandLine.addParameter("-v");
-        if (cfg.useShortRun)
+        if (testConfiguration.useShortRun)
             commandLine.addParameter("-short");
 
-        switch (cfg.executeWhat) {
+        switch (testConfiguration.executeWhat) {
             case Test:
-                if (cfg.filter != null && !cfg.filter.isEmpty())
-                    commandLine.addParameter("-run=" + cfg.filter.trim());
+                if (testConfiguration.filter != null && !testConfiguration.filter.isEmpty())
+                    commandLine.addParameter("-run=" + testConfiguration.filter.trim());
                 break;
             case Benchmark:
                 String benchmarkName = ".*";
 
-                if (cfg.filter != null && !cfg.filter.isEmpty())
-                    benchmarkName = cfg.filter.trim();
-                if (!cfg.testBeforeBenchmark) {
+                if (testConfiguration.filter != null && !testConfiguration.filter.isEmpty())
+                    benchmarkName = testConfiguration.filter.trim();
+                if (!testConfiguration.testBeforeBenchmark) {
                     commandLine.addParameter("-run=NONE");
                 }
                 commandLine.addParameter("-bench=" + benchmarkName);
                 break;
         }
 
-        commandLine.addParameter(cfg.packageName);
-        commandLine.getEnvironment().put("GOPATH", prependToGoPath(moduleFile.getParent().getCanonicalPath()));
-        commandLine.getEnvironment().put("GOROOT", getSdkHomePath(sdkData));
+        if (testConfiguration.testRunnerArgs != null && testConfiguration.testRunnerArgs.trim().length() > 0) {
+            commandLine.getParametersList().addParametersString(testConfiguration.testRunnerArgs);
+        }
+
+        if (testConfiguration.testTargetType.equals(GoTestConfiguration.TestTargetType.Package)) {
+            commandLine.addParameter(testConfiguration.packageName);
+        } else if (testConfiguration.testTargetType.equals(GoTestConfiguration.TestTargetType.File)) {
+            commandLine.addParameter(testConfiguration.testFile);
+        } else if (testConfiguration.testTargetType.equals(GoTestConfiguration.TestTargetType.CWD)) {
+            commandLine.addParameter("./...");
+        }
+
+        commandLine.getEnvironment().putAll(sysEnv);
+        commandLine.setWorkDirectory(workingDir);
+
+        if (testConfiguration.testArgs != null && testConfiguration.testArgs.trim().length() > 0) {
+            commandLine.getParametersList().addParametersString(testConfiguration.testArgs);
+        }
 
         return GoApplicationProcessHandler.runCommandLine(commandLine);
     }
 
     private String getSdkHomePath(GoSdkData sdkData) {
-        if (sdkData.GO_HOME_PATH.isEmpty()) {
-            return new File(sdkData.GO_BIN_PATH).getParent();
+        if (sdkData.GO_GOROOT_PATH.isEmpty()) {
+            return new File(sdkData.GO_BIN_PATH).getParentFile().getParent();
         }
-        return sdkData.GO_HOME_PATH;
+        return sdkData.GO_GOROOT_PATH;
     }
 
+    @NotNull
     @Override
     public ExecutionResult execute(@NotNull Executor executor, @NotNull ProgramRunner runner) throws ExecutionException {
         ProcessHandler processHandler = startProcess();
@@ -115,7 +204,7 @@ class GoCommandLineState extends CommandLineState {
 
         ConsoleView console = createAndAttachConsole("GoTest", processHandler, consoleProperties, getEnvironment());
         Project project = consoleProperties.getProject();
-        console.addMessageFilter(new GoTestConsoleFilter(project, packageDir));
+        console.addMessageFilter(new GoConsoleFilter(project, packageDir));
         return new DefaultExecutionResult(console, processHandler, createActions(console, processHandler, executor));
     }
 }

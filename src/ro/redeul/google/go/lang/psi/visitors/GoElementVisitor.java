@@ -5,6 +5,7 @@ import ro.redeul.google.go.lang.psi.GoPsiElement;
 import ro.redeul.google.go.lang.psi.declarations.GoConstDeclaration;
 import ro.redeul.google.go.lang.psi.declarations.GoConstDeclarations;
 import ro.redeul.google.go.lang.psi.declarations.GoVarDeclaration;
+import ro.redeul.google.go.lang.psi.expressions.binary.GoBinaryExpression;
 import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralBool;
 import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralFunction;
 import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralIdentifier;
@@ -12,6 +13,7 @@ import ro.redeul.google.go.lang.psi.expressions.literals.composite.GoLiteralComp
 import ro.redeul.google.go.lang.psi.expressions.literals.composite.GoLiteralCompositeElement;
 import ro.redeul.google.go.lang.psi.expressions.literals.composite.GoLiteralCompositeValue;
 import ro.redeul.google.go.lang.psi.expressions.primary.*;
+import ro.redeul.google.go.lang.psi.impl.statements.GoForWithRangeAndVarsStatementImpl;
 import ro.redeul.google.go.lang.psi.statements.*;
 import ro.redeul.google.go.lang.psi.statements.select.GoSelectCommClauseDefault;
 import ro.redeul.google.go.lang.psi.statements.select.GoSelectCommClauseRecv;
@@ -119,6 +121,10 @@ public class GoElementVisitor  {
     }
 
     public void visitForWithRange(GoForWithRangeStatement statement) {
+        visitElement(statement);
+    }
+
+    public void visitForWithRangeAndVars(GoForWithRangeAndVarsStatement statement) {
         visitElement(statement);
     }
 
@@ -260,5 +266,9 @@ public class GoElementVisitor  {
 
     public void visitSendStatement(GoSendStatement statement) {
         visitElement(statement);
+    }
+
+    public void visitBinaryExpression(GoBinaryExpression expression) {
+        visitElement(expression);
     }
 }

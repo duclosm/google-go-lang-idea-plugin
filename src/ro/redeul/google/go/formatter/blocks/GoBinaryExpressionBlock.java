@@ -9,14 +9,13 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings;
 import com.intellij.psi.tree.IElementType;
 import com.intellij.psi.tree.TokenSet;
-import org.jaxen.expr.AdditiveExpr;
 import org.jetbrains.annotations.Nullable;
 import ro.redeul.google.go.lang.psi.expressions.binary.GoAdditiveExpression;
 import ro.redeul.google.go.lang.psi.expressions.binary.GoBinaryExpression;
 
 class GoBinaryExpressionBlock extends GoBlock {
 
-    private final Spacing spacing;
+    private Spacing spacing;
 
     private static final TokenSet EMPTY_SET = TokenSet.create(
             oMINUS, oPLUS, oMUL, oQUOTIENT, oREMAINDER,
@@ -51,6 +50,11 @@ class GoBinaryExpressionBlock extends GoBlock {
                 ) {
             preParentElement = parentElement;
             parentElement = parentElement.getTreeParent();
+
+            if (parentElement == null) {
+                return;
+            }
+
             parentElementType = parentElement.getElementType();
 
             if (parentElementType == REL_EXPRESSION) {
@@ -78,11 +82,15 @@ class GoBinaryExpressionBlock extends GoBlock {
                 || parentElementType == CONST_DECLARATION
                 || parentElementType == VAR_DECLARATION
             ) {
-            if (preParentElement.getElementType() == ADD_EXPRESSION
-                    && node != preParentElement
-                    && preParentElement.getPsi(GoAdditiveExpression.class).getOperator() == oBIT_OR) {
-                spacing = EMPTY_SPACING_KEEP_LINE_BREAKS;
-                return;
+            try {
+                if (preParentElement.getElementType() == ADD_EXPRESSION
+                        && node != preParentElement
+                        && preParentElement.getPsi(GoAdditiveExpression.class).getOperator() == oBIT_OR) {
+                    spacing = EMPTY_SPACING_KEEP_LINE_BREAKS;
+                    return;
+                }
+            } catch (NullPointerException ignored) {
+
             }
 
             if (preParentElement.getElementType() == SLICE_EXPRESSION) {

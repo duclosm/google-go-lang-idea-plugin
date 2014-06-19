@@ -4,7 +4,6 @@ import com.intellij.codeInsight.lookup.LookupElementBuilder;
 import com.intellij.patterns.ElementPattern;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.impl.source.resolve.ResolveCache;
-import ro.redeul.google.go.lang.psi.utils.GoPsiScopesUtil;
 import com.intellij.psi.util.PsiUtilCore;
 import org.jetbrains.annotations.NotNull;
 import ro.redeul.google.go.lang.psi.GoPsiElement;
@@ -13,6 +12,7 @@ import ro.redeul.google.go.lang.psi.expressions.primary.GoLiteralExpression;
 import ro.redeul.google.go.lang.psi.processors.GoResolveStates;
 import ro.redeul.google.go.lang.psi.resolve.GoResolveResult;
 import ro.redeul.google.go.lang.psi.resolve.VarOrConstResolver;
+import ro.redeul.google.go.lang.psi.utils.GoPsiScopesUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,33 +21,31 @@ import static com.intellij.patterns.PlatformPatterns.psiElement;
 import static ro.redeul.google.go.util.LookupElementUtil.createLookupElement;
 
 public class VarOrConstReference
-    extends GoPsiReference.Single<GoLiteralIdentifier, VarOrConstReference> {
+        extends GoPsiReference.Single<GoLiteralIdentifier, VarOrConstReference> {
 
     public static final ElementPattern<GoLiteralIdentifier> MATCHER =
-        psiElement(GoLiteralIdentifier.class)
-            .withParent(psiElement(GoLiteralExpression.class));
+            psiElement(GoLiteralIdentifier.class)
+                    .withParent(
+                            psiElement(GoLiteralExpression.class)
+                    );
 
 
     private static final ResolveCache.AbstractResolver<VarOrConstReference, GoResolveResult> RESOLVER =
-        new ResolveCache.AbstractResolver<VarOrConstReference, GoResolveResult>() {
-            @Override
-            public GoResolveResult resolve(VarOrConstReference reference, boolean incompleteCode) {
-                VarOrConstResolver processor =
-                    new VarOrConstResolver(reference);
+            new ResolveCache.AbstractResolver<VarOrConstReference, GoResolveResult>() {
+                @Override
+                public GoResolveResult resolve(@NotNull VarOrConstReference reference, boolean incompleteCode) {
+                    VarOrConstResolver processor =
+                            new VarOrConstResolver(reference);
 
-                GoPsiScopesUtil.treeWalkUp(
-                        processor,
-                        reference.getElement().getParent().getParent(),
-                        reference.getElement().getContainingFile(),
-                        GoResolveStates.initial());
+                    GoPsiScopesUtil.treeWalkUp(
+                            processor,
+                            reference.getElement().getParent().getParent(),
+                            reference.getElement().getContainingFile(),
+                            GoResolveStates.initial());
 
-                PsiElement declaration = processor.getChildDeclaration();
-
-                return declaration != null
-                    ? new GoResolveResult(declaration)
-                    : GoResolveResult.NULL;
-            }
-        };
+                    return GoResolveResult.fromElement(processor.getChildDeclaration());
+                }
+            };
 
     public VarOrConstReference(GoLiteralIdentifier element) {
         super(element, RESOLVER);
@@ -81,10 +79,11 @@ public class VarOrConstReference
                 String name = PsiUtilCore.getName(declaration);
 
                 String visiblePackageName =
-                    getState().get(GoResolveStates.VisiblePackageName);
+                        getState().get(GoResolveStates.VisiblePackageName);
 
                 if (visiblePackageName != null) {
-                    name = visiblePackageName + "." + name;
+                    name = "".equals(visiblePackageName) ?
+                            name : visiblePackageName + "." + name;
                 }
                 if (name == null) {
                     return true;
@@ -98,10 +97,10 @@ public class VarOrConstReference
         };
 
         GoPsiScopesUtil.treeWalkUp(
-            processor,
-            getElement().getParent().getParent(),
-            getElement().getContainingFile(),
-            GoResolveStates.initial());
+                processor,
+                getElement().getParent().getParent(),
+                getElement().getContainingFile(),
+                GoResolveStates.initial());
 
         return variants.toArray();
     }

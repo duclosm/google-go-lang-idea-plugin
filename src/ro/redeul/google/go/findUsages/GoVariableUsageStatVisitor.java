@@ -19,8 +19,10 @@ import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralFunction;
 import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralIdentifier;
 import ro.redeul.google.go.lang.psi.expressions.primary.GoLiteralExpression;
 import ro.redeul.google.go.lang.psi.impl.GoPsiElementBase;
+import ro.redeul.google.go.lang.psi.statements.GoForWithRangeAndVarsStatement;
 import ro.redeul.google.go.lang.psi.statements.GoForWithRangeStatement;
 import ro.redeul.google.go.lang.psi.statements.GoShortVarDeclaration;
+import ro.redeul.google.go.lang.psi.statements.switches.GoSwitchTypeClause;
 import ro.redeul.google.go.lang.psi.toplevel.*;
 import ro.redeul.google.go.lang.psi.types.GoPsiType;
 import ro.redeul.google.go.lang.psi.types.GoPsiTypeName;
@@ -136,9 +138,8 @@ public class GoVariableUsageStatVisitor extends GoRecursiveElementVisitor {
     public void visitForWithRange(GoForWithRangeStatement statement) {
         ctx.addNewScopeLevel();
 
-        boolean isDeclaration = statement.isDeclaration();
-        visitExpressionAsIdentifier(statement.getKey(), isDeclaration);
-        visitExpressionAsIdentifier(statement.getValue(), isDeclaration);
+        visitExpressionAsIdentifier(statement.getKey(), false);
+        visitExpressionAsIdentifier(statement.getValue(), false);
 
         visitElement(statement.getRangeExpression());
         visitElement(statement.getBlock());
@@ -148,6 +149,24 @@ public class GoVariableUsageStatVisitor extends GoRecursiveElementVisitor {
                 ctx.unusedVariable(v);
             }
         }
+    }
+
+    @Override
+    public void visitForWithRangeAndVars(GoForWithRangeAndVarsStatement statement) {
+        ctx.addNewScopeLevel();
+
+        visitLiteralIdentifier(statement.getKey());
+        visitLiteralIdentifier(statement.getValue());
+
+        visitElement(statement.getRangeExpression());
+        visitElement(statement.getBlock());
+
+        for (VariableUsage v : ctx.popLastScopeLevel().values()) {
+            if (!v.isUsed()) {
+                ctx.unusedVariable(v);
+            }
+        }
+
     }
 
     @Override
@@ -406,7 +425,16 @@ public class GoVariableUsageStatVisitor extends GoRecursiveElementVisitor {
         }
 
         public boolean isDefinedInCurrentScope(GoPsiElement element) {
-            return variables.get(variables.size() - 1).containsKey(element.getText());
+            boolean isInCase = false;
+            PsiElement elem = element;
+            while (!(elem instanceof GoFile) && !isInCase) {
+                elem = elem.getParent();
+                if (elem instanceof GoSwitchTypeClause) {
+                    isInCase = true;
+                }
+            }
+
+            return variables.get(variables.size() - 1).containsKey(element.getText()) && !isInCase;
         }
 
         public void addDefinition(GoPsiElement element) {

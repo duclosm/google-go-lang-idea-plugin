@@ -194,7 +194,7 @@ class GoBlock implements Block, GoElementTypes {
         return true;
     }
 
-    public Spacing getSpacing(Block child1, Block child2) {
+    public Spacing getSpacing(Block child1, @NotNull Block child2) {
         if (!(child1 instanceof GoBlock) || !(child2 instanceof GoBlock)) {
             return null;
         }
@@ -222,8 +222,21 @@ class GoBlock implements Block, GoElementTypes {
         }
 
         // there should be a space before any block statement
-        if (child2.getNode().getPsi() instanceof GoBlockStatement) {
+        if (child2.getNode().getPsi() instanceof GoBlockStatement ||
+                child2Type == FUNCTION_RESULT) {
             return BASIC_SPACING_KEEP_LINE_BREAKS;
+        }
+
+        if (child1Type == kINTERFACE) {
+            try {
+                if (child1.getNode().getTreeParent().getTreeParent().getTreeParent().getTreeParent().getPsi() instanceof GoFile) {
+                    return BASIC_SPACING_KEEP_LINE_BREAKS;
+                } else {
+                    return EMPTY_SPACING_KEEP_LINE_BREAKS;
+                }
+            } catch (Exception ignored) {
+                return BASIC_SPACING_KEEP_LINE_BREAKS;
+            }
         }
 
         // there should be no space after "type" in type guard: p.(type)
@@ -251,7 +264,11 @@ class GoBlock implements Block, GoElementTypes {
         }
 
         if (COMMENTS.contains(child1Type) && child2Type == FUNCTION_DECLARATION) {
-            return BASIC_SPACING;
+            if (inTheSameLine(child1, child2)) {
+                return BASIC_SPACING_KEEP_LINE_BREAKS;
+            } else {
+                return ONE_LINE_SPACING_KEEP_LINE_BREAKS;
+            }
         }
 
         return null;
@@ -288,22 +305,6 @@ class GoBlock implements Block, GoElementTypes {
 
         ASTNode node = child.getNode();
         if (node == null || getIndentedElements().contains(node.getElementType())) {
-            if (node != null && node.getElementType() == LITERAL_COMPOSITE_ELEMENT) {
-                boolean inFunctionCall = false;
-                ASTNode nodeParent = node;
-                while (nodeParent != null) {
-                    if (nodeParent.getElementType() == CALL_OR_CONVERSION_EXPRESSION) {
-                        inFunctionCall = true;
-                        break;
-                    }
-
-                    nodeParent = nodeParent.getTreeParent();
-                }
-
-                if (inFunctionCall) {
-                    return Indent.getNoneIndent();
-                }
-            }
             return Indent.getNormalIndent();
         }
 

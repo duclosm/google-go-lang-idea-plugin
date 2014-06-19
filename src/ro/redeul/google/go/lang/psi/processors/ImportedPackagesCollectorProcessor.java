@@ -3,7 +3,9 @@ package ro.redeul.google.go.lang.psi.processors;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.ResolveState;
 import com.intellij.psi.scope.BaseScopeProcessor;
+import org.jetbrains.annotations.NotNull;
 import ro.redeul.google.go.lang.psi.GoPackageReference;
+import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralString;
 import ro.redeul.google.go.lang.psi.toplevel.GoImportDeclaration;
 
 import java.util.ArrayList;
@@ -19,9 +21,9 @@ public class ImportedPackagesCollectorProcessor extends BaseScopeProcessor {
 
     private final List<GoImportDeclaration> imports = new ArrayList<GoImportDeclaration>();
 
-    public boolean execute(PsiElement element, ResolveState state) {
+    public boolean execute(@NotNull PsiElement element, ResolveState state) {
 
-        if ( element instanceof GoImportDeclaration) {
+        if (element instanceof GoImportDeclaration) {
             processImport((GoImportDeclaration) element);
         }
 
@@ -43,12 +45,14 @@ public class ImportedPackagesCollectorProcessor extends BaseScopeProcessor {
         for (GoImportDeclaration importSpec : imports) {
             GoPackageReference packageReference = importSpec.getPackageReference();
 
-            if ( packageReference == null ) {
-                packageImports.add(importSpec.getImportPath().getValue());
+            if (packageReference == null) {
+                GoLiteralString importPath = importSpec.getImportPath();
+                if (importPath != null)
+                    packageImports.add(importPath.getValue());
                 continue;
             }
 
-            if ( packageReference.isLocal() || packageReference.isBlank() ) {
+            if (packageReference.isLocal() || packageReference.isBlank()) {
                 continue;
             }
 

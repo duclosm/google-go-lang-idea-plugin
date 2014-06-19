@@ -1,6 +1,6 @@
 package ro.redeul.google.go.completion;
 
-public class GoVariablesCompletionTestCase extends GoCompletionTestCase{
+public class GoVariablesCompletionTestCase extends GoCompletionTestCase {
     protected String getTestDataRelativePath() {
         return super.getTestDataRelativePath() + "variables";
     }
@@ -17,6 +17,10 @@ public class GoVariablesCompletionTestCase extends GoCompletionTestCase{
         doTestVariants();
     }
 
+    public void testLocalVarVariantsCaseInsensitive() {
+        doTestVariants();
+    }
+
     public void testStructFieldViaChannelExpression() {
         doTestVariants();
     }
@@ -30,6 +34,10 @@ public class GoVariablesCompletionTestCase extends GoCompletionTestCase{
     }
 
     public void testVarWithoutType() {
+        doTestVariants();
+    }
+
+    public void testFromDotImportedPackages() {
         doTestVariants();
     }
 }

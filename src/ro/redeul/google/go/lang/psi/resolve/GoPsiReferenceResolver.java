@@ -5,8 +5,12 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiReference;
 import com.intellij.psi.ResolveState;
 import com.intellij.psi.scope.PsiScopeProcessor;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import ro.redeul.google.go.lang.completion.GoCompletionContributor;
 import ro.redeul.google.go.lang.psi.GoPsiElement;
+import ro.redeul.google.go.lang.psi.processors.GoNamesUtil;
+import ro.redeul.google.go.lang.psi.processors.GoResolveStates;
 import ro.redeul.google.go.lang.psi.visitors.GoElementVisitor;
 
 import static ro.redeul.google.go.lang.psi.processors.GoResolveStates.VisiblePackageName;
@@ -24,7 +28,7 @@ public abstract class GoPsiReferenceResolver<Reference extends PsiReference>
         this.reference = reference;
     }
 
-    public boolean execute(PsiElement element, ResolveState state) {
+    public boolean execute(@NotNull PsiElement element, ResolveState state) {
 
         if (element instanceof GoPsiElement) {
             this.state = state;
@@ -80,16 +84,47 @@ public abstract class GoPsiReferenceResolver<Reference extends PsiReference>
     }
 
     @Override
-    public <T> T getHint(Key<T> hintKey) {
+    public <T> T getHint(@NotNull Key<T> hintKey) {
         return null;
     }
 
     @Override
-    public void handleEvent(Event event,
-                            @Nullable Object associated) {
+    public void handleEvent(Event event, @Nullable Object associated) {
     }
 
     public PsiElement getChildDeclaration() {
         return childDeclaration;
+    }
+
+    protected void checkIdentifiers(PsiElement... identifiers) {
+        String refName = getReference().getElement().getText();
+        String currentPackageName = getState().get(GoResolveStates.VisiblePackageName);
+        if (currentPackageName == null) {
+            currentPackageName = "";
+        }
+        boolean isOriginalPackage = getState().get(GoResolveStates.IsOriginalPackage);
+        boolean incomplete = refName.contains(GoCompletionContributor.DUMMY_IDENTIFIER);
+        if (incomplete) {
+            int completionPosition = refName.indexOf(GoCompletionContributor.DUMMY_IDENTIFIER);
+            refName = refName.substring(0, completionPosition);
+        }
+        for (PsiElement id : identifiers) {
+            if (id == null) {
+                continue;
+            }
+            String name = id.getText();
+            if (isOriginalPackage || GoNamesUtil.isExportedName(name)) {
+                if (refName.contains(".")) {
+                    name = currentPackageName + "." + name;
+                }
+                if (incomplete && name.toLowerCase().startsWith(refName.toLowerCase())) {
+                    addDeclaration(id);
+                    return;
+                } else if (refName.equals(name)) {
+                    addDeclaration(id);
+                    return;
+                }
+            }
+        }
     }
 }

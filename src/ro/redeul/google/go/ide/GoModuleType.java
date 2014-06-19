@@ -10,6 +10,7 @@ import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.projectRoots.SdkType;
 import com.intellij.openapi.roots.ui.configuration.ModulesProvider;
 import com.intellij.openapi.util.Computable;
+import org.jetbrains.annotations.NotNull;
 import ro.redeul.google.go.GoBundle;
 import ro.redeul.google.go.GoIcons;
 import ro.redeul.google.go.config.sdk.GoSdkType;
@@ -26,7 +27,7 @@ import java.util.List;
  */
 public class GoModuleType extends ModuleType<GoModuleBuilder> {
 
-    private static final String MODULE_TYPE_ID = "GO_MODULE";
+    public static final String MODULE_TYPE_ID = "GO_MODULE";
 
     public GoModuleType() {
         super(MODULE_TYPE_ID);
@@ -36,16 +37,19 @@ public class GoModuleType extends ModuleType<GoModuleBuilder> {
         return (GoModuleType) ModuleTypeManager.getInstance().findByID(MODULE_TYPE_ID);
     }
 
+    @NotNull
     @Override
     public GoModuleBuilder createModuleBuilder() {
         return new GoModuleBuilder();
     }
 
+    @NotNull
     @Override
     public String getName() {
         return GoBundle.message("go.module.type.name");
     }
 
+    @NotNull
     @Override
     public String getDescription() {
         return GoBundle.message("go.module.type.description");
@@ -61,23 +65,20 @@ public class GoModuleType extends ModuleType<GoModuleBuilder> {
         return GoIcons.GO_ICON_16x16;
     }
 
-    public boolean isValidSdk(final Module module, final Sdk projectSdk) {
+    public boolean isValidSdk(@NotNull final Module module, final Sdk projectSdk) {
         return projectSdk.getSdkType() == GoSdkType.getInstance();
     }
 
+    @NotNull
     @Override
-    public ModuleWizardStep[] createWizardSteps(WizardContext wizardContext, GoModuleBuilder moduleBuilder, ModulesProvider modulesProvider)
+    public ModuleWizardStep[] createWizardSteps(@NotNull WizardContext wizardContext, @NotNull GoModuleBuilder moduleBuilder, @NotNull ModulesProvider modulesProvider)
     {
         List<ModuleWizardStep> steps = new ArrayList<ModuleWizardStep>();
 
         ProjectWizardStepFactory factory = ProjectWizardStepFactory.getInstance();
 
-//        steps.add(factory.createSourcePathsStep(wizardContext, moduleBuilder, null, "reference.dialogs.new.project.fromScratch.source"));
-//        steps.add(factory.createProjectJdkStep(wizardContext));
-//        steps.add(new AndroidModuleWizardStep(moduleBuilder, wizardContext.getProject()));
         steps.add(factory.createSourcePathsStep(wizardContext, moduleBuilder, null, "reference.dialogs.new.project.fromScratch.source"));
         steps.add(factory.createProjectJdkStep(wizardContext, SdkType.findInstance(GoSdkType.class), moduleBuilder, new Computable.PredefinedValueComputable<Boolean>(true), null, ""));
-//        steps.add(new GoModuleWizardStep(moduleBuilder, wizardContext.getProject()));
         return steps.toArray(new ModuleWizardStep[steps.size()]);
     }
 }

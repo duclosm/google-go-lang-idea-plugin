@@ -13,12 +13,14 @@ import java.io.File;
     name="GoogleGoSettings",
     storages= {
         @Storage(
-            file = "$APP_CONFIG$/editor.codeinsight.xml"
+            file = "$APP_CONFIG$/settings.golang.xml"
         )}
 )
 public class GoSettings implements PersistentStateComponent<GoSettings>, ExportableComponent {
     public boolean SHOW_IMPORT_POPUP = true;
     public boolean OPTIMIZE_IMPORTS_ON_THE_FLY = true;
+    public String goRoot = "";
+    public String goPath = "";
 
     public GoSettings() {
         CodeInsightSettings codeInsightSettings = CodeInsightSettings.getInstance();

@@ -27,28 +27,22 @@ public class MethodReference
     private Set<GoTypeName> receiverTypes;
 
     private static final ResolveCache.AbstractResolver<MethodReference, GoResolveResult> RESOLVER =
-        new ResolveCache.AbstractResolver<MethodReference, GoResolveResult>() {
-            @Override
-            public GoResolveResult resolve(MethodReference methodReference, boolean incompleteCode) {
-                Set<GoTypeName> receiverTypes = methodReference.resolveBaseReceiverTypes();
+            new ResolveCache.AbstractResolver<MethodReference, GoResolveResult>() {
+                @Override
+                public GoResolveResult resolve(@NotNull MethodReference methodReference, boolean incompleteCode) {
+                    MethodResolver processor = new MethodResolver(methodReference);
 
-                MethodResolver processor = new MethodResolver(methodReference);
+                    GoSelectorExpression element = methodReference.getElement();
 
-                GoSelectorExpression element = methodReference.getElement();
+                    GoPsiScopesUtil.treeWalkUp(
+                            processor,
+                            element.getContainingFile().getLastChild(),
+                            element.getContainingFile(),
+                            GoResolveStates.initial());
 
-                GoPsiScopesUtil.treeWalkUp(
-                    processor,
-                    element.getContainingFile().getLastChild(),
-                    element.getContainingFile(),
-                    GoResolveStates.initial());
-
-                PsiElement declaration = processor.getChildDeclaration();
-
-                return declaration != null
-                    ? new GoResolveResult(declaration)
-                    : GoResolveResult.NULL;
-            }
-        };
+                    return GoResolveResult.fromElement(processor.getChildDeclaration());
+                }
+            };
 
     public MethodReference(@NotNull GoSelectorExpression element) {
         super(element, RESOLVER);
@@ -66,13 +60,13 @@ public class MethodReference
             return TextRange.EMPTY_RANGE;
 
         return new TextRange(identifier.getStartOffsetInParent(),
-                             identifier.getStartOffsetInParent() + identifier.getTextLength());
+                identifier.getStartOffsetInParent() + identifier.getTextLength());
     }
 
     @NotNull
     @Override
     public String getCanonicalText() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return ""; // @TODO replace this with something more meaningful
     }
 
     @Override
@@ -94,6 +88,10 @@ public class MethodReference
             @Override
             protected boolean addDeclaration(PsiElement declaration, PsiElement child) {
                 String name = PsiUtilCore.getName(declaration);
+
+                if (child == null) {
+                    return true;
+                }
 
                 variants.add(LookupElementUtil.createLookupElement(
                     (GoPsiElement) declaration, name,

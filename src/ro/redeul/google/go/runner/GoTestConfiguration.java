@@ -20,6 +20,7 @@ import org.jetbrains.annotations.NotNull;
 import ro.redeul.google.go.runner.ui.GoTestConfigurationEditorForm;
 import ro.redeul.google.go.runner.ui.properties.GoTestConsoleProperties;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 
@@ -35,16 +36,26 @@ public class GoTestConfiguration extends ModuleBasedConfiguration<GoApplicationM
         Test, Benchmark
     }
 
-    public String packageName;
-    public String packageDir;
-    public String filter;
+    public enum TestTargetType {
+        CWD, Package, File
+    }
+
+    public String envVars = "";
+    public String testRunnerArgs = "";
+    public TestTargetType testTargetType = TestTargetType.Package;
+    public String packageName = "";
+    public String packageDir = "";
+    public String testFile = "";
+    public String testArgs = "";
+    public String workingDir = "";
     public Type executeWhat = Type.Test;
-    public boolean useShortRun;
-    public boolean testBeforeBenchmark;
+    public String filter = "";
+    public boolean useShortRun = false;
+    public boolean testBeforeBenchmark = false;
+    public boolean goVetEnabled = false;
 
     public GoTestConfiguration(String name, Project project, GoTestConfigurationType configurationType) {
-        super(name, new GoApplicationModuleBasedConfiguration(project),
-              configurationType.getConfigurationFactories()[0]);
+        super(name, new GoApplicationModuleBasedConfiguration(project), configurationType.getConfigurationFactories()[0]);
     }
 
     @Override
@@ -63,13 +74,30 @@ public class GoTestConfiguration extends ModuleBasedConfiguration<GoApplicationM
     public void checkConfiguration() throws RuntimeConfigurationException {
         super.checkConfiguration();
 
-        if (getConfigurationModule().getModule() == null)
-            throw new RuntimeConfigurationException("A module is required");
+        if (testTargetType.equals(TestTargetType.Package) &&
+                (packageName == null || packageName.isEmpty())) {
+            throw new RuntimeConfigurationException("Package name is required");
+        }
 
-        if (packageName == null || packageName.isEmpty())
-            throw new RuntimeConfigurationException("A package is required");
+        if (testTargetType.equals(TestTargetType.File) &&
+                (testFile.isEmpty() || (!testFile.isEmpty() && !testFile.contains("_test.go")))) {
+            throw new RuntimeConfigurationException("The selected file does not appear to be a test file");
+        }
+
+        if (!workingDir.isEmpty()) {
+            File dir = new File(workingDir);
+
+            if (!dir.exists()) {
+                throw new RuntimeConfigurationException("The selected application working directory does not appear to exist.");
+            }
+
+            if (!dir.isDirectory()) {
+                throw new RuntimeConfigurationException("The selected application working directory does not appear to be a directory.");
+            }
+        }
     }
 
+    @NotNull
     public SettingsEditor<? extends RunConfiguration> getConfigurationEditor() {
         return new GoTestConfigurationEditorForm(getProject());
     }
@@ -90,6 +118,10 @@ public class GoTestConfiguration extends ModuleBasedConfiguration<GoApplicationM
 
     public RunProfileState getState(@NotNull Executor executor, @NotNull ExecutionEnvironment env)
             throws ExecutionException {
+        if (this.workingDir.isEmpty()) {
+            this.workingDir = getProject().getBaseDir().getCanonicalPath();
+        }
+
         return new GoCommandLineState(new GoTestConsoleProperties(this, executor), env);
     }
 

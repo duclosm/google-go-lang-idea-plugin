@@ -8,6 +8,7 @@ func main() {
     f := func (n int) int {return 7+n+/*begin*/Foo/*end*/([]string{"1","2","3"})}
     println(f(5))
 }
+
 -----
 package main
 
@@ -21,5 +22,5 @@ func main() {
 }
 
 func Foo(arg0 []string) {
-	<caret>
+	//TODO: implements Foo<caret>
 }

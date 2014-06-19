@@ -28,7 +28,7 @@ public class InterfaceMethodReference extends
     private static final ResolveCache.AbstractResolver<InterfaceMethodReference, GoResolveResult> RESOLVER =
         new ResolveCache.AbstractResolver<InterfaceMethodReference, GoResolveResult>() {
             @Override
-            public GoResolveResult resolve(InterfaceMethodReference intfMethodRef,
+            public GoResolveResult resolve(@NotNull InterfaceMethodReference intfMethodRef,
                                            boolean incompleteCode) {
                 GoSelectorExpression selector = intfMethodRef.selector;
 
@@ -47,7 +47,7 @@ public class InterfaceMethodReference extends
 
                 for (GoFunctionDeclaration declaration : methodSet.getMethods()) {
                     if (name.equals(declaration.getFunctionName())) {
-                        return new GoResolveResult(declaration.getNameIdentifier());
+                        return GoResolveResult.fromElement(declaration.getNameIdentifier());
                     }
                 }
 

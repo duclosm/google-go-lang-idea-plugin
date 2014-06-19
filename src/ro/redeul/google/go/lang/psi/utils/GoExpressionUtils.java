@@ -5,20 +5,24 @@ import com.intellij.psi.PsiElement;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import ro.redeul.google.go.lang.lexer.GoTokenTypes;
+import ro.redeul.google.go.lang.psi.GoPsiElement;
 import ro.redeul.google.go.lang.psi.expressions.GoPrimaryExpression;
 import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralIdentifier;
+import ro.redeul.google.go.lang.psi.expressions.primary.GoBuiltinCallExpression;
 import ro.redeul.google.go.lang.psi.expressions.primary.GoCallOrConvExpression;
 import ro.redeul.google.go.lang.psi.expressions.primary.GoLiteralExpression;
 import ro.redeul.google.go.lang.psi.expressions.primary.GoSelectorExpression;
 import ro.redeul.google.go.lang.psi.toplevel.GoFunctionDeclaration;
+import ro.redeul.google.go.util.GoUtil;
 
 import static ro.redeul.google.go.lang.psi.utils.GoIdentifierUtils.getFunctionDeclaration;
 import static ro.redeul.google.go.lang.psi.utils.GoPsiUtils.findChildOfType;
 import static ro.redeul.google.go.lang.psi.utils.GoPsiUtils.findParentOfType;
+import static ro.redeul.google.go.lang.psi.utils.GoPsiUtils.resolveSafely;
 
 public class GoExpressionUtils {
     @Nullable
-    public static GoLiteralIdentifier getCallFunctionIdentifier(@Nullable GoCallOrConvExpression call) {
+    public static GoPsiElement getCallFunctionIdentifier(@Nullable GoCallOrConvExpression call) {
         if (call == null) {
             return null;
         }
@@ -31,7 +35,7 @@ public class GoExpressionUtils {
         }
 
         if (baseExpression instanceof GoSelectorExpression) {
-            return ((GoSelectorExpression) baseExpression).getIdentifier();
+            return GoUtil.ResolveReferece(baseExpression);
         }
         return null;
 
@@ -39,11 +43,19 @@ public class GoExpressionUtils {
 
     /**
      * Find corresponding function declaration of a function call.
+     *
      * @param element should be a GoCallOrConvExpression or child of GoCallOrConvExpression
      * @return null if declaration can't be found
      */
     @Nullable
     public static GoFunctionDeclaration resolveToFunctionDeclaration(@Nullable PsiElement element) {
+        if (element instanceof GoBuiltinCallExpression){
+            PsiElement reference = resolveSafely(((GoBuiltinCallExpression) element).getBaseExpression(),
+                    PsiElement.class);
+            if (reference != null && reference.getParent() instanceof GoFunctionDeclaration){
+                return (GoFunctionDeclaration) reference.getParent();
+            }
+        }
         GoCallOrConvExpression callExpr = findParentOfType(element, GoCallOrConvExpression.class);
         return getFunctionDeclaration(getCallFunctionIdentifier(callExpr));
     }

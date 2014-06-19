@@ -4,6 +4,9 @@ import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.actionSystem.LangDataKeys;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ProjectRootManager;
+import ro.redeul.google.go.config.sdk.GoSdkType;
 
 public class NewGoGroup extends DefaultActionGroup
 {
@@ -12,7 +15,11 @@ public class NewGoGroup extends DefaultActionGroup
     {
         super.update(e);
 
+        Sdk sdk = ProjectRootManager.getInstance(e.getProject()).getProjectSdk();
+
         final Module data = LangDataKeys.MODULE.getData(e.getDataContext());
-        e.getPresentation().setVisible(data != null);
+        e.getPresentation().setVisible(data != null &&
+                sdk != null &&
+                sdk.getSdkType() instanceof GoSdkType);
     }
 }

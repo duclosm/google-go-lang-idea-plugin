@@ -1,7 +1,7 @@
 package ro.redeul.google.go.inspection.fix;
 
+import com.intellij.codeInsight.template.impl.TemplateImpl;
 import com.intellij.codeInspection.LocalQuickFixAndIntentionActionOnPsiElement;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
@@ -10,21 +10,18 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import ro.redeul.google.go.editor.TemplateUtil;
 import ro.redeul.google.go.lang.psi.GoPsiElement;
 import ro.redeul.google.go.lang.psi.declarations.GoVarDeclaration;
 import ro.redeul.google.go.lang.psi.declarations.GoVarDeclarations;
-import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteral;
-import ro.redeul.google.go.lang.psi.expressions.literals.GoLiteralIdentifier;
-import ro.redeul.google.go.lang.psi.expressions.primary.GoCallOrConvExpression;
-import ro.redeul.google.go.lang.psi.expressions.primary.GoLiteralExpression;
 import ro.redeul.google.go.lang.psi.statements.GoBlockStatement;
 import ro.redeul.google.go.lang.psi.statements.GoShortVarDeclaration;
 import ro.redeul.google.go.lang.psi.toplevel.GoFunctionDeclaration;
-import ro.redeul.google.go.util.GoUtil;
 
-import static ro.redeul.google.go.lang.psi.utils.GoPsiUtils.*;
-import static ro.redeul.google.go.util.EditorUtil.pressEnter;
-import static ro.redeul.google.go.util.EditorUtil.reformatLines;
+import java.util.ArrayList;
+
+import static ro.redeul.google.go.lang.psi.utils.GoPsiUtils.findChildOfClass;
+import static ro.redeul.google.go.lang.psi.utils.GoPsiUtils.findParentOfType;
 
 public class CreateClosureFunctionFix extends LocalQuickFixAndIntentionActionOnPsiElement {
     public CreateClosureFunctionFix(@Nullable PsiElement element) {
@@ -58,15 +55,8 @@ public class CreateClosureFunctionFix extends LocalQuickFixAndIntentionActionOnP
         if (childOfClass == null)
             childOfClass = findChildOfClass(p, GoShortVarDeclaration.class);
 
-        final String fnArguments;
-        //put arguments with the new func
-        StringBuilder stringBuilder = new StringBuilder();
-        if (isFunctionNameIdentifier(e)) {
-            fnArguments = GoUtil.InspectionGenFuncArgs(e);
-        } else {
-            fnArguments = "";
-        }
-        //end arguments
+        ArrayList<String> arguments = new ArrayList<String>();
+        final String fnArguments = CreateFunctionFix.InspectionGenFuncArgs(e, arguments);
 
         final int insertPoint;
 
@@ -77,38 +67,14 @@ public class CreateClosureFunctionFix extends LocalQuickFixAndIntentionActionOnP
         }
 
 
-        ApplicationManager.getApplication().runWriteAction(new Runnable() {
-            @Override
-            public void run() {
-                Document doc = PsiDocumentManager.getInstance(e.getProject()).getDocument(file);
+        Document doc = PsiDocumentManager.getInstance(e.getProject()).getDocument(file);
 
-                doc.insertString(insertPoint, String.format("\n\n%s := func (%s) {\n}\n", e.getText(), fnArguments));
-                if (editor != null) {
-                    int line = doc.getLineNumber(insertPoint);
-                    int offset = doc.getLineEndOffset(line + 2);
-                    editor.getCaretModel().moveToOffset(offset);
-                    reformatLines(file, editor, line, line + 3);
-                    pressEnter(editor);
-                }
-            }
-        });
-    }
+        if (doc == null) {
+            return;
+        }
 
-    public static boolean isFunctionNameIdentifier(PsiElement e) {
-        if (!psiIsA(e, GoLiteralExpression.class))
-            return false;
-
-        GoLiteral literal = ((GoLiteralExpression) e).getLiteral();
-        if (!(literal instanceof GoLiteralIdentifier))
-            return false;
-
-        if (((GoLiteralIdentifier) literal).isQualified())
-            return false;
-
-        if (!psiIsA(e.getParent(), GoCallOrConvExpression.class))
-            return false;
-
-        // function name is the first element of its parent.
-        return e.getStartOffsetInParent() == 0;
+        TemplateImpl template = TemplateUtil.createTemplate(String.format("\n\n%s := func (%s) { \n$v%d$$END$\n}", e.getText(), fnArguments, arguments.size()));
+        arguments.add("//TODO: implements " + e.getText());
+        TemplateUtil.runTemplate(editor, insertPoint, arguments, template);
     }
 }
